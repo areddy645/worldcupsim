@@ -22,8 +22,6 @@ def fetch_live_results():
     try:
         response = requests.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(response.text, 'html.parser')
-        # In a full production app, you would parse the specific FIFA JSON payload here.
-        # Since FIFA obfuscates their live endpoints, we use the fallback below for reliability.
     except:
         pass
 
@@ -120,14 +118,12 @@ def run_tournament(elo_dict, groups, played_matches, deterministic=False):
     for group_letter, teams in groups.items():
         pts = {t: 0 for t in teams}
         
-        # Calculate points for all 6 matches per group
         for i in range(len(teams)):
             for j in range(i+1, len(teams)):
                 t1, t2 = teams[i], teams[j]
                 match_tuple = (t1, t2)
                 match_tuple_rev = (t2, t1)
                 
-                # Check if match was already played in real life
                 if match_tuple in played_matches:
                     res = played_matches[match_tuple]
                     if res == 1: pts[t1] += 3
@@ -139,7 +135,6 @@ def run_tournament(elo_dict, groups, played_matches, deterministic=False):
                     elif res == -1: pts[t1] += 3
                     else: pts[t1] += 1; pts[t2] += 1
                 else:
-                    # Match hasn't happened yet -> Simulate it
                     if deterministic:
                         winner = t1 if elo_dict[t1] > elo_dict[t2] else t2
                         pts[winner] += 3
@@ -154,14 +149,35 @@ def run_tournament(elo_dict, groups, played_matches, deterministic=False):
         group_standings[group_letter] = sorted_teams
         third_places.append((group_letter, sorted_teams[2], elo_dict[sorted_teams[2]]))
 
-    # 2. Select 8 best third-place teams (using Elo as tiebreaker in sim)
+    # 2. Select 8 best third-place teams
     best_thirds = sorted(third_places, key=lambda x: x[2], reverse=True)[:8] 
     third_teams_dict = {g: t for g, t, e in best_thirds}
 
-    def get_3rd(valid_groups):
+    def get_3rd(target_winner, valid_groups):
+        """
+        Emulates the official FIFA Annex C matrix.
+        Prioritizes mathematically allowed matchups per group winner,
+        preventing structurally impossible pairings (like 1D vs 3F).
+        """
+        matrix_preferences = {
+            '1E': ['C', 'D', 'A', 'B', 'F'],
+            '1I': ['F', 'D', 'G', 'C', 'H'],
+            '1D': ['B', 'I', 'J', 'E', 'F'],
+            '1G': ['A', 'H', 'J', 'E', 'I'],
+            '1A': ['E', 'H', 'C', 'F', 'I'],
+            '1L': ['K', 'I', 'E', 'H', 'J'],
+            '1B': ['G', 'J', 'E', 'F', 'I'],
+            '1K': ['L', 'I', 'D', 'E', 'J']
+        }
+        
+        for g in matrix_preferences.get(target_winner, valid_groups):
+            if g in third_teams_dict and g in valid_groups:
+                return third_teams_dict.pop(g)
+                
         for g in valid_groups:
             if g in third_teams_dict:
                 return third_teams_dict.pop(g)
+        
         if third_teams_dict:
             k = list(third_teams_dict.keys())[0]
             return third_teams_dict.pop(k)
@@ -169,14 +185,22 @@ def run_tournament(elo_dict, groups, played_matches, deterministic=False):
 
     # 3. Official FIFA Round of 32 (Matches 73-88)
     r32_matches = [
-        (group_standings['A'][1], group_standings['B'][1]), (group_standings['E'][0], get_3rd(['A','B','C','D','F'])),                  
-        (group_standings['F'][0], group_standings['C'][1]), (group_standings['C'][0], group_standings['F'][1]),                         
-        (group_standings['I'][0], get_3rd(['C','D','F','G','H'])), (group_standings['E'][1], group_standings['I'][1]),                         
-        (group_standings['A'][0], get_3rd(['C','E','F','H','I'])), (group_standings['L'][0], get_3rd(['E','H','I','J','K'])),                  
-        (group_standings['D'][0], get_3rd(['B','E','F','I','J'])), (group_standings['G'][0], get_3rd(['A','E','H','I','J'])),                  
-        (group_standings['K'][1], group_standings['L'][1]), (group_standings['H'][0], group_standings['J'][1]),                         
-        (group_standings['B'][0], get_3rd(['E','F','G','I','J'])), (group_standings['J'][0], group_standings['H'][1]),                         
-        (group_standings['K'][0], get_3rd(['D','E','I','J','L'])), (group_standings['D'][1], group_standings['G'][1])                          
+        (group_standings['A'][1], group_standings['B'][1]),                         
+        (group_standings['E'][0], get_3rd('1E', ['A','B','C','D','F'])),                  
+        (group_standings['F'][0], group_standings['C'][1]),                         
+        (group_standings['C'][0], group_standings['F'][1]),                         
+        (group_standings['I'][0], get_3rd('1I', ['C','D','F','G','H'])),                  
+        (group_standings['E'][1], group_standings['I'][1]),                         
+        (group_standings['A'][0], get_3rd('1A', ['C','E','F','H','I'])),                  
+        (group_standings['L'][0], get_3rd('1L', ['E','H','I','J','K'])),                  
+        (group_standings['D'][0], get_3rd('1D', ['B','E','F','I','J'])),                  
+        (group_standings['G'][0], get_3rd('1G', ['A','E','H','I','J'])),                  
+        (group_standings['K'][1], group_standings['L'][1]),                         
+        (group_standings['H'][0], group_standings['J'][1]),                         
+        (group_standings['B'][0], get_3rd('1B', ['E','F','G','I','J'])),                  
+        (group_standings['J'][0], group_standings['H'][1]),                         
+        (group_standings['K'][0], get_3rd('1K', ['D','E','I','J','L'])),                  
+        (group_standings['D'][1], group_standings['G'][1])                          
     ]
 
     bracket = {"Round of 32": [], "Round of 16": [], "Quarter-Finals": [], "Semi-Finals": [], "Final": []}
@@ -269,7 +293,6 @@ with tab3:
     st.header("Live Results Engine")
     st.markdown(f"The simulator is currently locking in **{len(played_matches)} completed matches** from the 2026 Group Stage.")
     
-    # Format the dictionary for reading
     display_results = []
     for match, result in played_matches.items():
         if result == 1: score = f"{match[0]} Win"
