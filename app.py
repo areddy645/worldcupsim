@@ -12,8 +12,8 @@ st.set_page_config(page_title="World Cup 2026 Simulator", layout="wide")
 def fetch_live_results():
     """
     Attempts to scrape live scores from FIFA. 
-    Includes a robust fallback of 56 completed match scores as of June 25, 2026,
-    now indexed with official match numbers.
+    Includes a robust fallback of 56 completed match scores mapped to 
+    their TRUE official FIFA match numbers.
     """
     url = "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures?country=US&wtw-filter=ALL"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -24,52 +24,63 @@ def fetch_live_results():
     except:
         pass
 
-    # FALLBACK: 56 Real-world match scores mapped to sequential Match Numbers (1-56)
+    # FALLBACK: (Home, Away, Home Goals, Away Goals, Official Match Number)
     raw_matches = [
         # Group A
-        ("Mexico", "South Africa", 2, 0), ("South Korea", "Czechia", 1, 0),
-        ("Czechia", "South Africa", 1, 1), ("Mexico", "South Korea", 2, 1),
-        ("South Africa", "South Korea", 2, 1), ("Mexico", "Czechia", 3, 0),
+        ("Mexico", "South Africa", 2, 0, 1), ("South Korea", "Czechia", 1, 0, 2),
+        ("Czechia", "South Africa", 1, 1, 25), ("Mexico", "South Korea", 2, 1, 26),
+        ("South Africa", "South Korea", 2, 1, 49), ("Mexico", "Czechia", 3, 0, 50),
+        
         # Group B
-        ("Canada", "Bosnia and Herzegovina", 1, 1), ("Qatar", "Switzerland", 0, 0),
-        ("Switzerland", "Bosnia and Herzegovina", 2, 1), ("Canada", "Qatar", 2, 0),
-        ("Switzerland", "Canada", 1, 0), ("Bosnia and Herzegovina", "Qatar", 2, 0),
+        ("Canada", "Bosnia and Herzegovina", 1, 1, 3), ("Qatar", "Switzerland", 0, 0, 5),
+        ("Switzerland", "Bosnia and Herzegovina", 2, 1, 27), ("Canada", "Qatar", 2, 0, 28),
+        ("Switzerland", "Canada", 1, 0, 51), ("Bosnia and Herzegovina", "Qatar", 2, 0, 52),
+        
         # Group C
-        ("Brazil", "Morocco", 1, 1), ("Scotland", "Haiti", 2, 0),
-        ("Morocco", "Scotland", 2, 1), ("Brazil", "Haiti", 3, 0),
-        ("Morocco", "Haiti", 2, 0), ("Brazil", "Scotland", 2, 0),
-        # Group D
-        ("USA", "Paraguay", 2, 1), ("Australia", "Türkiye", 1, 0),
-        ("USA", "Australia", 2, 0), ("Paraguay", "Türkiye", 2, 1),
+        ("Brazil", "Morocco", 1, 1, 6), ("Scotland", "Haiti", 2, 0, 7),
+        ("Morocco", "Scotland", 2, 1, 29), ("Brazil", "Haiti", 3, 0, 30),
+        ("Morocco", "Haiti", 2, 0, 53), ("Brazil", "Scotland", 2, 0, 54),
+        
+        # Group D (M49+ pending)
+        ("USA", "Paraguay", 2, 1, 4), ("Australia", "Türkiye", 1, 0, 8),
+        ("USA", "Australia", 2, 0, 31), ("Paraguay", "Türkiye", 2, 1, 32),
+        
         # Group E
-        ("Germany", "Curaçao", 3, 0), ("Ivory Coast", "Ecuador", 2, 1),
-        ("Germany", "Ivory Coast", 2, 0), ("Ecuador", "Curaçao", 1, 1),
-        ("Ecuador", "Germany", 2, 1), ("Curaçao", "Ivory Coast", 0, 1),
-        # Group F
-        ("Netherlands", "Japan", 1, 1), ("Sweden", "Tunisia", 1, 0),
-        ("Netherlands", "Sweden", 2, 0), ("Japan", "Tunisia", 2, 1),
-        # Group G
-        ("Belgium", "Egypt", 0, 0), ("Iran", "New Zealand", 1, 1),
-        ("Belgium", "Iran", 1, 1), ("Egypt", "New Zealand", 2, 0),
-        # Group H
-        ("Spain", "Cabo Verde", 1, 1), ("Saudi Arabia", "Uruguay", 0, 0),
-        ("Spain", "Saudi Arabia", 2, 0), ("Uruguay", "Cabo Verde", 1, 1),
-        # Group I
-        ("France", "Senegal", 2, 0), ("Norway", "Iraq", 2, 0),
-        ("France", "Iraq", 3, 0), ("Norway", "Senegal", 2, 1),
-        # Group J
-        ("Argentina", "Algeria", 2, 0), ("Austria", "Jordan", 2, 1),
-        ("Argentina", "Austria", 2, 1), ("Algeria", "Jordan", 1, 0),
-        # Group K
-        ("Portugal", "DR Congo", 0, 0), ("Colombia", "Uzbekistan", 2, 0),
-        ("Portugal", "Uzbekistan", 3, 0), ("Colombia", "DR Congo", 2, 1),
-        # Group L
-        ("England", "Croatia", 1, 0), ("Ghana", "Panama", 2, 1),
-        ("England", "Ghana", 1, 1), ("Croatia", "Panama", 2, 0)
+        ("Germany", "Curaçao", 3, 0, 9), ("Ivory Coast", "Ecuador", 2, 1, 11),
+        ("Germany", "Ivory Coast", 2, 0, 33), ("Ecuador", "Curaçao", 1, 1, 34),
+        ("Ecuador", "Germany", 2, 1, 55), ("Curaçao", "Ivory Coast", 0, 1, 56),
+        
+        # Group F (M49+ pending)
+        ("Netherlands", "Japan", 1, 1, 10), ("Sweden", "Tunisia", 1, 0, 12),
+        ("Netherlands", "Sweden", 2, 0, 35), ("Japan", "Tunisia", 2, 1, 36),
+        
+        # Group G (M49+ pending)
+        ("Belgium", "Egypt", 0, 0, 14), ("Iran", "New Zealand", 1, 1, 16),
+        ("Belgium", "Iran", 1, 1, 37), ("Egypt", "New Zealand", 2, 0, 38),
+        
+        # Group H (M49+ pending)
+        ("Spain", "Cabo Verde", 1, 1, 13), ("Saudi Arabia", "Uruguay", 0, 0, 15),
+        ("Spain", "Saudi Arabia", 2, 0, 39), ("Uruguay", "Cabo Verde", 1, 1, 40),
+        
+        # Group I (M49+ pending)
+        ("France", "Senegal", 2, 0, 17), ("Norway", "Iraq", 2, 0, 18),
+        ("France", "Iraq", 3, 0, 41), ("Norway", "Senegal", 2, 1, 42),
+        
+        # Group J (M49+ pending)
+        ("Argentina", "Algeria", 2, 0, 19), ("Austria", "Jordan", 2, 1, 20),
+        ("Argentina", "Austria", 2, 1, 43), ("Algeria", "Jordan", 1, 0, 44),
+        
+        # Group K (M49+ pending)
+        ("Portugal", "DR Congo", 0, 0, 21), ("Colombia", "Uzbekistan", 2, 0, 24),
+        ("Portugal", "Uzbekistan", 3, 0, 45), ("Colombia", "DR Congo", 2, 1, 46),
+        
+        # Group L (M49+ pending)
+        ("England", "Croatia", 1, 0, 22), ("Ghana", "Panama", 2, 1, 23),
+        ("England", "Ghana", 1, 1, 47), ("Croatia", "Panama", 2, 0, 48)
     ]
     
-    # Format: (Home, Away) : (Home Goals, Away Goals, Match Number)
-    played_matches = { (h, a): (gh, ga, idx) for idx, (h, a, gh, ga) in enumerate(raw_matches, start=1) }
+    # Format: (Home, Away) : (Home Goals, Away Goals, Official Match Number)
+    played_matches = { (h, a): (gh, ga, match_num) for (h, a, gh, ga, match_num) in raw_matches }
     return played_matches
 
 @st.cache_data
@@ -194,7 +205,6 @@ def run_tournament(elo_dict, groups, played_matches, annex_c_matrix, determinist
             'pts': pts[sorted_teams[2]], 'gd': gd[sorted_teams[2]], 'elo': elo_dict[sorted_teams[2]]
         })
 
-    # Select 8 best third-place teams strictly using Points, then Goal Difference
     best_thirds = sorted(third_places, key=lambda x: (x['pts'], x['gd'], x['elo']), reverse=True)[:8]
     third_teams_dict = {x['group']: x['team'] for x in best_thirds}
     
