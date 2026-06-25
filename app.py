@@ -231,7 +231,7 @@ def run_tournament(elo_dict, groups, played_matches, deterministic=False):
     else: return [m[i] for i in range(73, 89)], [m[i] for i in range(89, 97)], [m[i] for i in range(97, 101)], [m[101], m[102]], winner
 
 # --- 3. RUN MONTE CARLO ---
-def run_monte_carlo(elo_df, groups, played_matches, n_sims=1000):
+def run_monte_carlo(elo_df, groups, played_matches, n_sims=10000): # Updated default to 10000
     elo_dict = dict(zip(elo_df['Team'], elo_df['Elo']))
     teams = list(elo_dict.keys())
     wins = {t: {'R16': 0, 'QF': 0, 'SF': 0, 'Final': 0, 'Win': 0} for t in teams}
@@ -285,9 +285,9 @@ with tab1:
 
 with tab2:
     st.header("Full Tournament Progression Probabilities")
-    st.markdown("Running 1,000 simulations on the *remaining* schedule. Teams that have already secured points have drastically altered odds!")
-    with st.spinner("Running Monte Carlo simulations..."):
-        ko_probs = run_monte_carlo(elo_df, groups, played_matches, n_sims=1000)
+    st.markdown("Running **10,000 simulations** on the *remaining* schedule. Teams that have already secured points have drastically altered odds!")
+    with st.spinner("Running 10,000 Monte Carlo simulations..."):
+        ko_probs = run_monte_carlo(elo_df, groups, played_matches, n_sims=10000) # Updated function call
     st.dataframe(ko_probs.style.format({col: "{:.1f}%" for col in ko_probs.columns if "%" in col}).background_gradient(cmap="Blues"), use_container_width=True)
 
 with tab3:
