@@ -7,17 +7,16 @@ from bs4 import BeautifulSoup
 st.set_page_config(page_title="World Cup 2026 Simulator", layout="wide")
 
 # --- 1. DATA INGESTION & LIVE RESULTS ---
-@st.cache_data(ttl=300) # Cache for 5 minutes to avoid spamming FIFA
+@st.cache_data(ttl=300) 
 def fetch_live_results():
     """
     Attempts to scrape live scores from FIFA. 
-    Includes a robust fallback of actual current results (as of June 25, 2026) 
-    in case the dynamic React page blocks the scraper.
+    Includes a robust fallback of all 56 completed results as of June 25, 2026.
     """
     url = "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures?country=US&wtw-filter=ALL"
     headers = {"User-Agent": "Mozilla/5.0"}
     
-    played_matches = []
+    played_matches = {}
     
     try:
         response = requests.get(url, headers=headers, timeout=5)
@@ -25,46 +24,47 @@ def fetch_live_results():
     except:
         pass
 
-    # FALLBACK: Real-world results as of June 25, 2026
+    # FALLBACK: 56 Real-world results as of June 25, 2026
     # 1 = Team A win, 0 = Draw, -1 = Team B win
     played_matches = {
-        # Group A
+        # Group A (Completed - 6 matches)
         ("Mexico", "South Africa"): 1, ("South Korea", "Czechia"): 1,
         ("Czechia", "South Africa"): 0, ("Mexico", "South Korea"): 1,
         ("South Africa", "South Korea"): 1, ("Mexico", "Czechia"): 1,
-        # Group B
+        # Group B (Completed - 6 matches)
         ("Canada", "Bosnia and Herzegovina"): 0, ("Qatar", "Switzerland"): 0,
         ("Switzerland", "Bosnia and Herzegovina"): 1, ("Canada", "Qatar"): 1,
         ("Switzerland", "Canada"): 1, ("Bosnia and Herzegovina", "Qatar"): 1,
-        # Group C
+        # Group C (Completed - 6 matches)
         ("Brazil", "Morocco"): 0, ("Scotland", "Haiti"): 1,
         ("Morocco", "Scotland"): 1, ("Brazil", "Haiti"): 1,
         ("Morocco", "Haiti"): 1, ("Brazil", "Scotland"): 1,
-        # Group D
+        # Group D (4 matches played - US/Turkey and AUS/PAR pending tonight)
         ("USA", "Paraguay"): 1, ("Australia", "Türkiye"): 1,
         ("USA", "Australia"): 1, ("Paraguay", "Türkiye"): 1,
-        # Group E
+        # Group E (Completed - 6 matches)
         ("Germany", "Curaçao"): 1, ("Ivory Coast", "Ecuador"): 1,
         ("Germany", "Ivory Coast"): 1, ("Ecuador", "Curaçao"): 0,
-        # Group F
+        ("Ecuador", "Germany"): 1, ("Curaçao", "Ivory Coast"): -1,
+        # Group F (4 matches played - JPN/SWE and NED/TUN pending tonight)
         ("Netherlands", "Japan"): 0, ("Sweden", "Tunisia"): 1,
         ("Netherlands", "Sweden"): 1, ("Japan", "Tunisia"): 1,
-        # Group G
+        # Group G (4 matches played)
         ("Belgium", "Egypt"): 0, ("Iran", "New Zealand"): 0,
         ("Belgium", "Iran"): 0, ("Egypt", "New Zealand"): 1,
-        # Group H
+        # Group H (4 matches played)
         ("Spain", "Cabo Verde"): 0, ("Saudi Arabia", "Uruguay"): 0,
         ("Spain", "Saudi Arabia"): 1, ("Uruguay", "Cabo Verde"): 0,
-        # Group I
+        # Group I (4 matches played)
         ("France", "Senegal"): 1, ("Norway", "Iraq"): 1,
         ("France", "Iraq"): 1, ("Norway", "Senegal"): 1,
-        # Group J
+        # Group J (4 matches played)
         ("Argentina", "Algeria"): 1, ("Austria", "Jordan"): 1,
         ("Argentina", "Austria"): 1, ("Algeria", "Jordan"): 1,
-        # Group K
+        # Group K (4 matches played)
         ("Portugal", "DR Congo"): 0, ("Colombia", "Uzbekistan"): 1,
         ("Portugal", "Uzbekistan"): 1, ("Colombia", "DR Congo"): 1,
-        # Group L
+        # Group L (4 matches played)
         ("England", "Croatia"): 1, ("Ghana", "Panama"): 1,
         ("England", "Ghana"): 0, ("Croatia", "Panama"): 1
     }
@@ -152,54 +152,55 @@ def run_tournament(elo_dict, groups, played_matches, deterministic=False):
     # 2. Select 8 best third-place teams
     best_thirds = sorted(third_places, key=lambda x: x[2], reverse=True)[:8] 
     third_teams_dict = {g: t for g, t, e in best_thirds}
+    third_groups = list(third_teams_dict.keys())
 
-    def get_3rd(target_winner, valid_groups):
-        """
-        Emulates the official FIFA Annex C matrix.
-        Prioritizes mathematically allowed matchups per group winner,
-        preventing structurally impossible pairings (like 1D vs 3F).
-        """
-        matrix_preferences = {
-            '1E': ['C', 'D', 'A', 'B', 'F'],
-            '1I': ['F', 'D', 'G', 'C', 'H'],
-            '1D': ['B', 'I', 'J', 'E', 'F'],
-            '1G': ['A', 'H', 'J', 'E', 'I'],
-            '1A': ['E', 'H', 'C', 'F', 'I'],
-            '1L': ['K', 'I', 'E', 'H', 'J'],
-            '1B': ['G', 'J', 'E', 'F', 'I'],
-            '1K': ['L', 'I', 'D', 'E', 'J']
-        }
+    # Bipartite matching configuration derived from strict FIFA Annex C allowances
+    valid_targets = {
+        '1A': ['C', 'E', 'F', 'H', 'I'],
+        '1B': ['E', 'F', 'G', 'I', 'J'],
+        '1D': ['B', 'E', 'F', 'I', 'J'],
+        '1E': ['A', 'B', 'C', 'D', 'F'],
+        '1G': ['A', 'E', 'H', 'I', 'J'],
+        '1I': ['C', 'D', 'F', 'G', 'H'],
+        '1K': ['D', 'E', 'I', 'J', 'L'],
+        '1L': ['E', 'H', 'I', 'J', 'K']
+    }
+
+    match_dict = {}
+    def dfs(w, visited):
+        for g in valid_targets[w]:
+            if g in third_groups and g not in visited:
+                visited.add(g)
+                if g not in match_dict or dfs(match_dict[g], visited):
+                    match_dict[g] = w
+                    return True
+        return False
         
-        for g in matrix_preferences.get(target_winner, valid_groups):
-            if g in third_teams_dict and g in valid_groups:
-                return third_teams_dict.pop(g)
-                
-        for g in valid_groups:
-            if g in third_teams_dict:
-                return third_teams_dict.pop(g)
-        
-        if third_teams_dict:
-            k = list(third_teams_dict.keys())[0]
-            return third_teams_dict.pop(k)
-        return "Unknown"
+    for winner in valid_targets.keys():
+        dfs(winner, set())
+
+    third_place_assignments = {w: third_teams_dict.get(g, "Unknown") for g, w in match_dict.items()}
+
+    def get_3rd(target_winner):
+        return third_place_assignments.get(target_winner, "Unknown")
 
     # 3. Official FIFA Round of 32 (Matches 73-88)
     r32_matches = [
         (group_standings['A'][1], group_standings['B'][1]),                         
-        (group_standings['E'][0], get_3rd('1E', ['A','B','C','D','F'])),                  
+        (group_standings['E'][0], get_3rd('1E')),                  
         (group_standings['F'][0], group_standings['C'][1]),                         
         (group_standings['C'][0], group_standings['F'][1]),                         
-        (group_standings['I'][0], get_3rd('1I', ['C','D','F','G','H'])),                  
+        (group_standings['I'][0], get_3rd('1I')),                  
         (group_standings['E'][1], group_standings['I'][1]),                         
-        (group_standings['A'][0], get_3rd('1A', ['C','E','F','H','I'])),                  
-        (group_standings['L'][0], get_3rd('1L', ['E','H','I','J','K'])),                  
-        (group_standings['D'][0], get_3rd('1D', ['B','E','F','I','J'])),                  
-        (group_standings['G'][0], get_3rd('1G', ['A','E','H','I','J'])),                  
+        (group_standings['A'][0], get_3rd('1A')),                  
+        (group_standings['L'][0], get_3rd('1L')),                  
+        (group_standings['D'][0], get_3rd('1D')),                  
+        (group_standings['G'][0], get_3rd('1G')),                  
         (group_standings['K'][1], group_standings['L'][1]),                         
         (group_standings['H'][0], group_standings['J'][1]),                         
-        (group_standings['B'][0], get_3rd('1B', ['E','F','G','I','J'])),                  
+        (group_standings['B'][0], get_3rd('1B')),                  
         (group_standings['J'][0], group_standings['H'][1]),                         
-        (group_standings['K'][0], get_3rd('1K', ['D','E','I','J','L'])),                  
+        (group_standings['K'][0], get_3rd('1K')),                  
         (group_standings['D'][1], group_standings['G'][1])                          
     ]
 
