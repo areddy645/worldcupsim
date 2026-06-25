@@ -7,7 +7,6 @@ st.set_page_config(page_title="World Cup 2026 Simulator", layout="wide")
 # --- 1. DATA INGESTION (OFFICIAL 2026 GROUPS) ---
 @st.cache_data
 def get_official_groups():
-    """The actual 12 groups for the 2026 World Cup."""
     return {
         "A": ["Mexico", "South Africa", "South Korea", "Czechia"],
         "B": ["Switzerland", "Canada", "Bosnia and Herzegovina", "Qatar"],
@@ -25,9 +24,9 @@ def get_official_groups():
 
 @st.cache_data
 def fetch_elo_ratings():
-    """Realistic Elo ratings for the 48 qualified teams."""
-    teams = [team for group in get_official_groups().values() for team in group]
-    # Assigning proxy ratings based on historical global ranks
+    groups = get_official_groups()
+    teams = [team for group in groups.values() for team in group]
+    
     base_ratings = {
         "Argentina": 2140, "France": 2110, "Spain": 2090, "England": 2040, "Brazil": 2030,
         "Portugal": 2010, "Netherlands": 2000, "Colombia": 1990, "Germany": 1970, "Uruguay": 1960, 
@@ -42,119 +41,94 @@ def fetch_elo_ratings():
     }
     return pd.DataFrame([{"Team": t, "Elo": base_ratings.get(t, 1500)} for t in teams])
 
-# --- 2. CORE LOGIC ---
-def simulate_match(elo_a, elo_b):
+# --- 2. MATCH SIMULATION & BRACKET MAPPING LOGIC ---
+def simulate_match_prob(elo_a, elo_b):
     return 1 / (1 + 10 ** ((elo_b - elo_a) / 400))
 
-def generate_predicted_bracket(elo_df, groups):
-    """Predicts the knockout stage using the official FIFA 12-group structural mapping."""
-    elo_dict = dict(zip(elo_df['Team'], elo_df['Elo']))
-    
-    # 1. Deterministic Group Stage (Rank teams by Elo to simulate expected finish)
+def run_tournament(elo_dict, groups, deterministic=False):
+    """Simulates or deterministically calculates one full tournament run based on the official FIFA bracket."""
     group_standings = {}
     third_places = []
     
+    # 1. Group Stage
     for group_letter, teams in groups.items():
-        sorted_teams = sorted(teams, key=lambda x: elo_dict[x], reverse=True)
+        if deterministic:
+            # Sort directly by Elo
+            sorted_teams = sorted(teams, key=lambda x: elo_dict[x], reverse=True)
+        else:
+            pts = {t: 0 for t in teams}
+            for i in range(len(teams)):
+                for j in range(i+1, len(teams)):
+                    t1, t2 = teams[i], teams[j]
+                    p_win = simulate_match_prob(elo_dict[t1], elo_dict[t2])
+                    roll = np.random.rand()
+                    if roll < p_win * 0.75: pts[t1] += 3
+                    elif roll > 1 - ((1-p_win)*0.75): pts[t2] += 3
+                    else: pts[t1] += 1; pts[t2] += 1
+            sorted_teams = [t[0] for t in sorted(pts.items(), key=lambda x: (x[1], elo_dict[x[0]]), reverse=True)]
+            
         group_standings[group_letter] = sorted_teams
-        third_places.append((sorted_teams[2], elo_dict[sorted_teams[2]]))
-        
-    # Get top 8 third-place teams overall
-    best_thirds = [t[0] for t in sorted(third_places, key=lambda x: x[1], reverse=True)[:8]]
-    
-    def get_3rd(pool):
-        """Helper to assign a valid 3rd place team from the pool without reusing them."""
-        for t in best_thirds:
-            for g in pool:
-                if t in group_standings[g]:
-                    best_thirds.remove(t)
-                    return t
-        return "TBD (No valid 3rd)"
+        third_places.append((group_letter, sorted_teams[2], elo_dict[sorted_teams[2]]))
 
-    # 2. Official Round of 32 Mapping
+    # 2. Select the best 8 third-place teams
+    if deterministic:
+        best_thirds = sorted(third_places, key=lambda x: x[2], reverse=True)[:8]
+    else:
+        # In monte carlo, we simulate points roughly, but using elo as a proxy tiebreaker
+        best_thirds = sorted(third_places, key=lambda x: x[2], reverse=True)[:8] 
+        
+    third_teams_dict = {g: t for g, t, e in best_thirds}
+
+    def get_3rd(valid_groups):
+        """Finds an available 3rd place team from the allowed source groups."""
+        for g in valid_groups:
+            if g in third_teams_dict:
+                team = third_teams_dict.pop(g)
+                return team
+        # Fallback if the strict matrix combinations run dry (happens rarely in simplified dynamic mapping)
+        if third_teams_dict:
+            k = list(third_teams_dict.keys())[0]
+            return third_teams_dict.pop(k)
+        return "Unknown"
+
+    # 3. Official FIFA Round of 32 (Matches 73-88)
     r32_matches = [
-        (group_standings['A'][1], group_standings['B'][1]),                         # Match 73: 2A vs 2B
-        (group_standings['E'][0], get_3rd(['A','B','C','D','F'])),                  # Match 74: 1E vs 3A/B/C/D/F
-        (group_standings['F'][0], group_standings['C'][1]),                         # Match 75: 1F vs 2C
-        (group_standings['C'][0], group_standings['F'][1]),                         # Match 76: 1C vs 2F
-        (group_standings['I'][0], get_3rd(['C','D','F','G','H'])),                  # Match 77: 1I vs 3C/D/F/G/H
-        (group_standings['E'][1], group_standings['I'][1]),                         # Match 78: 2E vs 2I
-        (group_standings['A'][0], get_3rd(['C','E','F','H','I'])),                  # Match 79: 1A vs 3C/E/F/H/I
-        (group_standings['L'][0], get_3rd(['E','H','I','J','K'])),                  # Match 80: 1L vs 3E/H/I/J/K
-        (group_standings['D'][0], get_3rd(['B','E','F','I','J'])),                  # Match 81: 1D vs 3B/E/F/I/J
-        (group_standings['G'][0], get_3rd(['A','E','H','I','J'])),                  # Match 82: 1G vs 3A/E/H/I/J
-        (group_standings['K'][1], group_standings['L'][1]),                         # Match 83: 2K vs 2L
-        (group_standings['H'][0], group_standings['J'][1]),                         # Match 84: 1H vs 2J
-        (group_standings['B'][0], get_3rd(['E','F','G','I','J'])),                  # Match 85: 1B vs 3E/F/G/I/J
-        (group_standings['J'][0], group_standings['H'][1]),                         # Match 86: 1J vs 2H
-        (group_standings['K'][0], get_3rd(['D','E','I','J','L'])),                  # Match 87: 1K vs 3D/E/I/J/L
-        (group_standings['D'][1], group_standings['G'][1])                          # Match 88: 2D vs 2G
+        (group_standings['A'][1], group_standings['B'][1]),                         # M73: 2A v 2B
+        (group_standings['E'][0], get_3rd(['A','B','C','D','F'])),                  # M74: 1E v 3rd
+        (group_standings['F'][0], group_standings['C'][1]),                         # M75: 1F v 2C
+        (group_standings['C'][0], group_standings['F'][1]),                         # M76: 1C v 2F
+        (group_standings['I'][0], get_3rd(['C','D','F','G','H'])),                  # M77: 1I v 3rd
+        (group_standings['E'][1], group_standings['I'][1]),                         # M78: 2E v 2I
+        (group_standings['A'][0], get_3rd(['C','E','F','H','I'])),                  # M79: 1A v 3rd
+        (group_standings['L'][0], get_3rd(['E','H','I','J','K'])),                  # M80: 1L v 3rd
+        (group_standings['D'][0], get_3rd(['B','E','F','I','J'])),                  # M81: 1D v 3rd
+        (group_standings['G'][0], get_3rd(['A','E','H','I','J'])),                  # M82: 1G v 3rd
+        (group_standings['K'][1], group_standings['L'][1]),                         # M83: 2K v 2L
+        (group_standings['H'][0], group_standings['J'][1]),                         # M84: 1H v 2J
+        (group_standings['B'][0], get_3rd(['E','F','G','I','J'])),                  # M85: 1B v 3rd
+        (group_standings['J'][0], group_standings['H'][1]),                         # M86: 1J v 2H
+        (group_standings['K'][0], get_3rd(['D','E','I','J','L'])),                  # M87: 1K v 3rd
+        (group_standings['D'][1], group_standings['G'][1])                          # M88: 2D v 2G
     ]
 
     bracket = {"Round of 32": [], "Round of 16": [], "Quarter-Finals": [], "Semi-Finals": [], "Final": []}
     
-    # Resolve R32
-    r16_teams = []
-    for t1, t2 in r32_matches:
-        winner = t1 if simulate_match(elo_dict.get(t1, 1500), elo_dict.get(t2, 1500)) > 0.5 else t2
-        bracket["Round of 32"].append(f"{t1} vs {t2} *(Advancing: {winner})*")
-        r16_teams.append(winner)
+    def play_match(t1, t2, round_name=None):
+        if deterministic:
+            winner = t1 if elo_dict.get(t1, 1500) > elo_dict.get(t2, 1500) else t2
+        else:
+            winner = t1 if np.random.rand() < simulate_match_prob(elo_dict.get(t1, 1500), elo_dict.get(t2, 1500)) else t2
+        
+        if round_name:
+            bracket[round_name].append(f"{t1} vs {t2} *(Adv: {winner})*")
+        return winner
 
-    # Official Knockout Pathing
-    def simulate_deterministic_round(teams_in_round, round_name):
-        next_round = []
-        for i in range(0, len(teams_in_round), 2):
-            t1, t2 = teams_in_round[i], teams_in_round[i+1]
-            winner = t1 if simulate_match(elo_dict[t1], elo_dict[t2]) > 0.5 else t2
-            bracket[round_name].append(f"{t1} vs {t2} *(Advancing: {winner})*")
-            next_round.append(winner)
-        return next_round
+    # R32 Results
+    m = {}
+    for i, match in enumerate(r32_matches):
+        m[73+i] = play_match(match[0], match[1], "Round of 32" if deterministic else None)
 
-    # R16 pairings follow the official match number schedule 
-    # (e.g., W73 vs W75, W74 vs W77, W76 vs W78, W79 vs W80, W83 vs W84, W81 vs W82, W86 vs W88, W85 vs W87)
-    r16_ordered = [
-        r16_teams[0], r16_teams[2], r16_teams[1], r16_teams[4], 
-        r16_teams[3], r16_teams[5], r16_teams[6], r16_teams[7],
-        r16_teams[10], r16_teams[11], r16_teams[8], r16_teams[9], 
-        r16_teams[13], r16_teams[15], r16_teams[12], r16_teams[14]
-    ]
-
-    qf_teams = simulate_deterministic_round(r16_ordered, "Round of 16")
-    sf_teams = simulate_deterministic_round(qf_teams, "Quarter-Finals")
-    final_teams = simulate_deterministic_round(sf_teams, "Semi-Finals")
-    simulate_deterministic_round(final_teams, "Final")
-    
-    return bracket
-
-# --- 3. UI DASHBOARD ---
-st.title("🏆 World Cup 2026 Live Probabilities")
-
-elo_df = fetch_elo_ratings()
-groups = get_official_groups()
-
-st.header("Predicted Bracket Matchups (Official FIFA Structure)")
-st.markdown("Calculated deterministically using the official 12-group format and strict Round of 32 FIFA mapping.")
-
-bracket = generate_predicted_bracket(elo_df, groups)
-
-col1, col2, col3, col4, col5 = st.columns(5)
-
-with col1:
-    st.subheader("Round of 32")
-    for match in bracket["Round of 32"]: st.markdown(f"- {match}")
-with col2:
-    st.subheader("Round of 16")
-    for match in bracket["Round of 16"]: st.markdown(f"- {match}")
-with col3:
-    st.subheader("Quarter-Finals")
-    for match in bracket["Quarter-Finals"]: st.markdown(f"- {match}")
-with col4:
-    st.subheader("Semi-Finals")
-    for match in bracket["Semi-Finals"]: st.markdown(f"- {match}")
-with col5:
-    st.subheader("Final")
-    for match in bracket["Final"]: st.markdown(f"- {match}")
-
-st.divider()
-st.subheader("Baseline Data (Actual 2026 Qualified Groups)")
-st.json(groups)
+    # 4. Official FIFA Round of 16 (Matches 89-96)
+    r16_matches = [
+        (m[74], m[77]), (m[73], m[75]), (m[76], m[78]), (m[79], m[80]), # M89, M90, M91, M92
+        (m[83], m[84]), (m[81], m[82]), (m[86], m
