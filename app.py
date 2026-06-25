@@ -131,4 +131,105 @@ def run_tournament(elo_dict, groups, deterministic=False):
     # 4. Official FIFA Round of 16 (Matches 89-96)
     r16_matches = [
         (m[74], m[77]), (m[73], m[75]), (m[76], m[78]), (m[79], m[80]), # M89, M90, M91, M92
-        (m[83], m[84]), (m[81], m[82]), (m[86], m
+        (m[83], m[84]), (m[81], m[82]), (m[86], m[88]), (m[85], m[87])  # M93, M94, M95, M96
+    ]
+    for i, match in enumerate(r16_matches):
+        m[89+i] = play_match(match[0], match[1], "Round of 16" if deterministic else None)
+
+    # 5. Official FIFA Quarter-Finals (Matches 97-100)
+    qf_matches = [(m[89], m[90]), (m[93], m[94]), (m[91], m[92]), (m[95], m[96])]
+    for i, match in enumerate(qf_matches):
+        m[97+i] = play_match(match[0], match[1], "Quarter-Finals" if deterministic else None)
+
+    # 6. Official FIFA Semi-Finals (Matches 101-102)
+    m[101] = play_match(m[97], m[98], "Semi-Finals" if deterministic else None)
+    m[102] = play_match(m[99], m[100], "Semi-Finals" if deterministic else None)
+
+    # 7. Official FIFA Final (Match 104)
+    winner = play_match(m[101], m[102], "Final" if deterministic else None)
+    
+    if deterministic:
+        return bracket
+    else:
+        # Return how far teams made it for the Monte Carlo aggregator
+        r16_teams = [m[i] for i in range(73, 89)]
+        qf_teams = [m[i] for i in range(89, 97)]
+        sf_teams = [m[i] for i in range(97, 101)]
+        final_teams = [m[101], m[102]]
+        return r16_teams, qf_teams, sf_teams, final_teams, winner
+
+# --- 3. RUN MONTE CARLO ---
+def run_monte_carlo(elo_df, groups, n_sims=1000):
+    elo_dict = dict(zip(elo_df['Team'], elo_df['Elo']))
+    teams = list(elo_dict.keys())
+    wins = {t: {'R16': 0, 'QF': 0, 'SF': 0, 'Final': 0, 'Win': 0} for t in teams}
+    
+    for _ in range(n_sims):
+        r16_teams, qf_teams, sf_teams, final_teams, winner = run_tournament(elo_dict, groups, deterministic=False)
+        
+        for t in r16_teams: wins[t]['R16'] += 1
+        for t in qf_teams: wins[t]['QF'] += 1
+        for t in sf_teams: wins[t]['SF'] += 1
+        for t in final_teams: wins[t]['Final'] += 1
+        wins[winner]['Win'] += 1
+            
+    results = []
+    for t in teams:
+        if wins[t]['R16'] > 0: # Only show teams that advance
+            results.append({
+                "Team": t,
+                "Make R16 (%)": (wins[t]['R16']/n_sims)*100,
+                "Make QF (%)": (wins[t]['QF']/n_sims)*100,
+                "Make SF (%)": (wins[t]['SF']/n_sims)*100,
+                "Make Final (%)": (wins[t]['Final']/n_sims)*100,
+                "Win World Cup (%)": (wins[t]['Win']/n_sims)*100,
+            })
+    return pd.DataFrame(results).sort_values("Win World Cup (%)", ascending=False).reset_index(drop=True)
+
+# --- 4. UI DASHBOARD ---
+st.title("🏆 World Cup 2026 Live Probabilities")
+st.markdown("Calculated using strict routing through the official **FIFA Match 73–104 Knockout Bracket**.")
+
+elo_df = fetch_elo_ratings()
+groups = get_official_groups()
+
+tab1, tab2, tab3 = st.tabs([
+    "🔮 Deterministic Predicted Bracket", 
+    "🏆 Monte Carlo Win Probabilities", 
+    "🌐 Teams & Ratings"
+])
+
+with tab1:
+    st.header("Predicted Bracket Matchups (FIFA Official Mapping)")
+    
+    bracket = run_tournament(dict(zip(elo_df['Team'], elo_df['Elo'])), groups, deterministic=True)
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        st.subheader("Round of 32")
+        for match in bracket["Round of 32"]: st.markdown(f"- {match}")
+    with col2:
+        st.subheader("Round of 16")
+        for match in bracket["Round of 16"]: st.markdown(f"- {match}")
+    with col3:
+        st.subheader("Quarter-Finals")
+        for match in bracket["Quarter-Finals"]: st.markdown(f"- {match}")
+    with col4:
+        st.subheader("Semi-Finals")
+        for match in bracket["Semi-Finals"]: st.markdown(f"- {match}")
+    with col5:
+        st.subheader("Final")
+        for match in bracket["Final"]: st.markdown(f"- {match}")
+
+with tab2:
+    st.header("Full Tournament Progression Probabilities")
+    st.markdown("Running full 1,000 tournament simulations parsing Group A-L round robin points through the exact match pathing.")
+    
+    with st.spinner("Running Monte Carlo simulations (this may take a few seconds)..."):
+        ko_probs = run_monte_carlo(elo_df, groups, n_sims=1000)
+    
+    st.dataframe(ko_probs.style.format({col: "{:.1f}%" for col in ko_probs.columns if "%" in col}).background_gradient(cmap="Blues"), use_container_width=True)
+
+with tab3:
+    st.header("Current Elo Ratings (Source Data)")
+    st.dataframe(elo_df, use_container_width=True)
