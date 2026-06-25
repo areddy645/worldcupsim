@@ -243,4 +243,42 @@ with tab1:
     
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        st.subheader("Round
+        st.subheader("Round of 32")
+        for match in bracket["Round of 32"]: st.markdown(f"- {match}")
+    with col2:
+        st.subheader("Round of 16")
+        for match in bracket["Round of 16"]: st.markdown(f"- {match}")
+    with col3:
+        st.subheader("Quarter-Finals")
+        for match in bracket["Quarter-Finals"]: st.markdown(f"- {match}")
+    with col4:
+        st.subheader("Semi-Finals")
+        for match in bracket["Semi-Finals"]: st.markdown(f"- {match}")
+    with col5:
+        st.subheader("Final")
+        for match in bracket["Final"]: st.markdown(f"- {match}")
+
+with tab2:
+    st.header("Full Tournament Progression Probabilities")
+    st.markdown("Running 1,000 simulations on the *remaining* schedule. Teams that have already secured points have drastically altered odds!")
+    with st.spinner("Running Monte Carlo simulations..."):
+        ko_probs = run_monte_carlo(elo_df, groups, played_matches, n_sims=1000)
+    st.dataframe(ko_probs.style.format({col: "{:.1f}%" for col in ko_probs.columns if "%" in col}).background_gradient(cmap="Blues"), use_container_width=True)
+
+with tab3:
+    st.header("Live Results Engine")
+    st.markdown(f"The simulator is currently locking in **{len(played_matches)} completed matches** from the 2026 Group Stage.")
+    
+    # Format the dictionary for reading
+    display_results = []
+    for match, result in played_matches.items():
+        if result == 1: score = f"{match[0]} Win"
+        elif result == -1: score = f"{match[1]} Win"
+        else: score = "Draw"
+        display_results.append({"Home": match[0], "Away": match[1], "Result": score})
+        
+    st.dataframe(pd.DataFrame(display_results), use_container_width=True)
+
+with tab4:
+    st.header("Current Elo Ratings (Source Data)")
+    st.dataframe(elo_df, use_container_width=True)
