@@ -5,17 +5,18 @@ import numpy as np
 st.set_page_config(page_title="World Cup 2026 Simulator", layout="wide")
 
 # --- 1. DATA INGESTION ---
+
 @st.cache_data(ttl=3600)
 def fetch_elo_ratings():
-    """Proxy for live Elo ratings from eloratings.net."""
+    """Proxy for live Elo ratings using ONLY officially qualified 2026 teams."""
     mock_teams = {
         "Argentina": 2140, "France": 2110, "Spain": 2090, "England": 2040, "Brazil": 2030,
-        "Portugal": 2010, "Netherlands": 2000, "Colombia": 1990, "Italy": 1980, "Germany": 1970,
-        "Uruguay": 1960, "Croatia": 1950, "Belgium": 1930, "Morocco": 1910, "Japan": 1890,
-        "USA": 1880, "Mexico": 1870, "Senegal": 1860, "Switzerland": 1850, "Denmark": 1840,
-        "Ecuador": 1830, "Ukraine": 1820, "Iran": 1810, "South Korea": 1800, "Austria": 1790,
-        "Australia": 1780, "Serbia": 1770, "Hungary": 1760, "Poland": 1750, "Sweden": 1740,
-        "Wales": 1730, "Peru": 1720
+        "Portugal": 2010, "Netherlands": 2000, "Colombia": 1990, "Germany": 1970, "Uruguay": 1960, 
+        "Croatia": 1950, "Belgium": 1930, "Morocco": 1910, "Japan": 1890, "USA": 1880, 
+        "Mexico": 1870, "Senegal": 1860, "Switzerland": 1850, "Ecuador": 1830, "Iran": 1810, 
+        "South Korea": 1800, "Austria": 1790, "Australia": 1780, "Sweden": 1740, "Turkey": 1735,
+        "Scotland": 1720, "Norway": 1715, "South Africa": 1700, "Ivory Coast": 1690, "Egypt": 1685,
+        "Canada": 1650, "New Zealand": 1620
     }
     return pd.DataFrame(list(mock_teams.items()), columns=["Team", "Elo"])
 
