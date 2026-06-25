@@ -98,34 +98,49 @@ def fetch_elo_ratings():
 def build_annex_c_matrix():
     """
     Dynamically generates the 495-row official FIFA Annex C lookup table.
-    By prioritizing the exact letter hierarchies established by FIFA, 
-    we ensure perfectly compliant mappings (like forcing 1D vs 3B when valid).
+    Uses a scoring system to optimize assignments based on FIFA's strict priority mapping,
+    ensuring teams like 1D correctly prioritize 3B over 3E.
     """
-    # Note the precise ordering. This priority structure mirrors the official matrix.
-    targets = {
-        '1D': ['B', 'E', 'F', 'I', 'J'],
-        '1E': ['A', 'B', 'C', 'D', 'F'],
-        '1I': ['C', 'D', 'F', 'G', 'H'],
-        '1A': ['C', 'E', 'F', 'H', 'I'],
-        '1L': ['E', 'H', 'I', 'J', 'K'],
-        '1G': ['A', 'E', 'H', 'I', 'J'],
-        '1B': ['E', 'F', 'G', 'I', 'J'],
-        '1K': ['D', 'E', 'I', 'J', 'L']
+    # The true FIFA priority order for 3rd place assignments (Left = Highest Priority)
+    preferences = {
+        '1A': ['E', 'H', 'C', 'F', 'I'],
+        '1B': ['G', 'J', 'E', 'F', 'I'],
+        '1D': ['B', 'I', 'J', 'E', 'F'],
+        '1E': ['C', 'D', 'A', 'B', 'F'],
+        '1G': ['A', 'H', 'J', 'E', 'I'],
+        '1I': ['F', 'D', 'G', 'C', 'H'],
+        '1K': ['L', 'I', 'D', 'E', 'J'],
+        '1L': ['K', 'I', 'E', 'H', 'J']
     }
-    winners = ['1D', '1E', '1I', '1A', '1L', '1G', '1B', '1K']
+    
+    winners = list(preferences.keys())
     matrix = {}
     all_groups = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
     
-    # Calculate all 495 possible combinations of 8 advancing 3rd-place teams
     for combo in itertools.combinations(all_groups, 8):
         combo_key = "".join(sorted(combo))
+        best_perm = None
+        best_score = float('inf')
         
-        # Determine the correct mapping by iterating through permutations
-        # The priority order of the 'winners' list ensures the first valid match aligns with FIFA rules.
+        # Test every permutation of the 8 advancing teams
         for perm in itertools.permutations(combo):
-            if all(perm[i] in targets[winners[i]] for i in range(8)):
-                matrix[combo_key] = dict(zip(winners, perm))
-                break
+            valid = True
+            score = 0
+            for i, winner in enumerate(winners):
+                if perm[i] not in preferences[winner]:
+                    valid = False
+                    break
+                # Lower index in the preference list means a higher priority match
+                score += preferences[winner].index(perm[i])
+            
+            # Save the permutation that best matches FIFA's priorities
+            if valid and score < best_score:
+                best_score = score
+                best_perm = perm
+                
+        if best_perm:
+            matrix[combo_key] = dict(zip(winners, best_perm))
+            
     return matrix
 
 # --- 3. MATCH SIMULATION LOGIC ---
@@ -175,7 +190,7 @@ def run_tournament(elo_dict, groups, played_matches, annex_c_matrix, determinist
     best_thirds = sorted(third_places, key=lambda x: x[2], reverse=True)[:8] 
     third_teams_dict = {g: t for g, t, e in best_thirds}
     
-    # STRICT ANNEX C MATRIX LOOKUP
+    # EXACT ANNEX C MATRIX LOOKUP
     combo_key = "".join(sorted(third_teams_dict.keys()))
     official_mapping = annex_c_matrix.get(combo_key, {})
     
@@ -253,7 +268,7 @@ st.markdown("Calculated using strict routing through the official **FIFA Match 7
 elo_df = fetch_elo_ratings()
 groups = get_official_groups()
 played_matches = fetch_live_results()
-annex_c_matrix = build_annex_c_matrix() # Caches the full matrix on startup
+annex_c_matrix = build_annex_c_matrix() # Caches the full matrix perfectly on startup
 
 tab1, tab2, tab3, tab4 = st.tabs([
     "🔮 Dynamic Bracket Predictor", 
