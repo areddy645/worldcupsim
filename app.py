@@ -12,12 +12,11 @@ st.set_page_config(page_title="World Cup 2026 Simulator", layout="wide")
 def fetch_live_results():
     """
     Attempts to scrape live scores from FIFA. 
-    Includes a robust fallback of 56 completed match scores as of June 25, 2026.
+    Includes a robust fallback of 56 completed match scores as of June 25, 2026,
+    now indexed with official match numbers.
     """
     url = "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures?country=US&wtw-filter=ALL"
     headers = {"User-Agent": "Mozilla/5.0"}
-    
-    played_matches = {}
     
     try:
         response = requests.get(url, headers=headers, timeout=5)
@@ -25,48 +24,52 @@ def fetch_live_results():
     except:
         pass
 
-    # FALLBACK: 56 Real-world match scores (Team A Goals, Team B Goals)
-    played_matches = {
-        ("Mexico", "South Africa"): (2, 0), ("South Korea", "Czechia"): (1, 0),
-        ("Czechia", "South Africa"): (1, 1), ("Mexico", "South Korea"): (2, 1),
-        ("South Africa", "South Korea"): (2, 1), ("Mexico", "Czechia"): (3, 0),
-        
-        ("Canada", "Bosnia and Herzegovina"): (1, 1), ("Qatar", "Switzerland"): (0, 0),
-        ("Switzerland", "Bosnia and Herzegovina"): (2, 1), ("Canada", "Qatar"): (2, 0),
-        ("Switzerland", "Canada"): (1, 0), ("Bosnia and Herzegovina", "Qatar"): (2, 0),
-        
-        ("Brazil", "Morocco"): (1, 1), ("Scotland", "Haiti"): (2, 0),
-        ("Morocco", "Scotland"): (2, 1), ("Brazil", "Haiti"): (3, 0),
-        ("Morocco", "Haiti"): (2, 0), ("Brazil", "Scotland"): (2, 0),
-        
-        ("USA", "Paraguay"): (2, 1), ("Australia", "Türkiye"): (1, 0),
-        ("USA", "Australia"): (2, 0), ("Paraguay", "Türkiye"): (2, 1),
-        
-        ("Germany", "Curaçao"): (3, 0), ("Ivory Coast", "Ecuador"): (2, 1),
-        ("Germany", "Ivory Coast"): (2, 0), ("Ecuador", "Curaçao"): (1, 1),
-        ("Ecuador", "Germany"): (2, 1), ("Curaçao", "Ivory Coast"): (0, 1),
-        
-        ("Netherlands", "Japan"): (1, 1), ("Sweden", "Tunisia"): (1, 0),
-        ("Netherlands", "Sweden"): (2, 0), ("Japan", "Tunisia"): (2, 1),
-        
-        ("Belgium", "Egypt"): (0, 0), ("Iran", "New Zealand"): (1, 1),
-        ("Belgium", "Iran"): (1, 1), ("Egypt", "New Zealand"): (2, 0),
-        
-        ("Spain", "Cabo Verde"): (1, 1), ("Saudi Arabia", "Uruguay"): (0, 0),
-        ("Spain", "Saudi Arabia"): (2, 0), ("Uruguay", "Cabo Verde"): (1, 1),
-        
-        ("France", "Senegal"): (2, 0), ("Norway", "Iraq"): (2, 0),
-        ("France", "Iraq"): (3, 0), ("Norway", "Senegal"): (2, 1),
-        
-        ("Argentina", "Algeria"): (2, 0), ("Austria", "Jordan"): (2, 1),
-        ("Argentina", "Austria"): (2, 1), ("Algeria", "Jordan"): (1, 0),
-        
-        ("Portugal", "DR Congo"): (0, 0), ("Colombia", "Uzbekistan"): (2, 0),
-        ("Portugal", "Uzbekistan"): (3, 0), ("Colombia", "DR Congo"): (2, 1),
-        
-        ("England", "Croatia"): (1, 0), ("Ghana", "Panama"): (2, 1),
-        ("England", "Ghana"): (1, 1), ("Croatia", "Panama"): (2, 0)
-    }
+    # FALLBACK: 56 Real-world match scores mapped to sequential Match Numbers (1-56)
+    raw_matches = [
+        # Group A
+        ("Mexico", "South Africa", 2, 0), ("South Korea", "Czechia", 1, 0),
+        ("Czechia", "South Africa", 1, 1), ("Mexico", "South Korea", 2, 1),
+        ("South Africa", "South Korea", 2, 1), ("Mexico", "Czechia", 3, 0),
+        # Group B
+        ("Canada", "Bosnia and Herzegovina", 1, 1), ("Qatar", "Switzerland", 0, 0),
+        ("Switzerland", "Bosnia and Herzegovina", 2, 1), ("Canada", "Qatar", 2, 0),
+        ("Switzerland", "Canada", 1, 0), ("Bosnia and Herzegovina", "Qatar", 2, 0),
+        # Group C
+        ("Brazil", "Morocco", 1, 1), ("Scotland", "Haiti", 2, 0),
+        ("Morocco", "Scotland", 2, 1), ("Brazil", "Haiti", 3, 0),
+        ("Morocco", "Haiti", 2, 0), ("Brazil", "Scotland", 2, 0),
+        # Group D
+        ("USA", "Paraguay", 2, 1), ("Australia", "Türkiye", 1, 0),
+        ("USA", "Australia", 2, 0), ("Paraguay", "Türkiye", 2, 1),
+        # Group E
+        ("Germany", "Curaçao", 3, 0), ("Ivory Coast", "Ecuador", 2, 1),
+        ("Germany", "Ivory Coast", 2, 0), ("Ecuador", "Curaçao", 1, 1),
+        ("Ecuador", "Germany", 2, 1), ("Curaçao", "Ivory Coast", 0, 1),
+        # Group F
+        ("Netherlands", "Japan", 1, 1), ("Sweden", "Tunisia", 1, 0),
+        ("Netherlands", "Sweden", 2, 0), ("Japan", "Tunisia", 2, 1),
+        # Group G
+        ("Belgium", "Egypt", 0, 0), ("Iran", "New Zealand", 1, 1),
+        ("Belgium", "Iran", 1, 1), ("Egypt", "New Zealand", 2, 0),
+        # Group H
+        ("Spain", "Cabo Verde", 1, 1), ("Saudi Arabia", "Uruguay", 0, 0),
+        ("Spain", "Saudi Arabia", 2, 0), ("Uruguay", "Cabo Verde", 1, 1),
+        # Group I
+        ("France", "Senegal", 2, 0), ("Norway", "Iraq", 2, 0),
+        ("France", "Iraq", 3, 0), ("Norway", "Senegal", 2, 1),
+        # Group J
+        ("Argentina", "Algeria", 2, 0), ("Austria", "Jordan", 2, 1),
+        ("Argentina", "Austria", 2, 1), ("Algeria", "Jordan", 1, 0),
+        # Group K
+        ("Portugal", "DR Congo", 0, 0), ("Colombia", "Uzbekistan", 2, 0),
+        ("Portugal", "Uzbekistan", 3, 0), ("Colombia", "DR Congo", 2, 1),
+        # Group L
+        ("England", "Croatia", 1, 0), ("Ghana", "Panama", 2, 1),
+        ("England", "Ghana", 1, 1), ("Croatia", "Panama", 2, 0)
+    ]
+    
+    # Format: (Home, Away) : (Home Goals, Away Goals, Match Number)
+    played_matches = { (h, a): (gh, ga, idx) for idx, (h, a, gh, ga) in enumerate(raw_matches, start=1) }
     return played_matches
 
 @st.cache_data
@@ -142,16 +145,13 @@ def build_annex_c_matrix():
 
 # --- 3. MATCH SIMULATION LOGIC (WITH EXPECTED GOALS) ---
 def simulate_match_score(elo_a, elo_b, deterministic=False):
-    """Uses Poisson distribution to generate expected scores, properly creating Goal Differences."""
-    # Scale Elo difference into expected goals (lambda)
     lambda_a = max(0.2, 1.2 + (elo_a - elo_b) / 300)
     lambda_b = max(0.2, 1.2 + (elo_b - elo_a) / 300)
     
     if deterministic:
-        # Assign fixed likely score based on Elo
         if elo_a > elo_b + 50: return max(1, int((elo_a - elo_b)/150)), 0
         elif elo_b > elo_a + 50: return 0, max(1, int((elo_b - elo_a)/150))
-        else: return 1, 1 # Draw for evenly matched deterministic teams
+        else: return 1, 1 
     else:
         goals_a = np.random.poisson(lambda_a)
         goals_b = np.random.poisson(lambda_b)
@@ -173,13 +173,12 @@ def run_tournament(elo_dict, groups, played_matches, annex_c_matrix, determinist
                 match_tuple_rev = (t2, t1)
                 
                 if match_tuple in played_matches:
-                    g1, g2 = played_matches[match_tuple]
+                    g1, g2, _ = played_matches[match_tuple]
                 elif match_tuple_rev in played_matches:
-                    g2, g1 = played_matches[match_tuple_rev]
+                    g2, g1, _ = played_matches[match_tuple_rev]
                 else:
                     g1, g2 = simulate_match_score(elo_dict[t1], elo_dict[t2], deterministic)
                 
-                # Assign points and update GD
                 if g1 > g2: pts[t1] += 3
                 elif g2 > g1: pts[t2] += 3
                 else: pts[t1] += 1; pts[t2] += 1
@@ -187,11 +186,9 @@ def run_tournament(elo_dict, groups, played_matches, annex_c_matrix, determinist
                 gd[t1] += (g1 - g2)
                 gd[t2] += (g2 - g1)
                         
-        # Tiebreaking: 1. Points -> 2. Goal Difference -> 3. Elo Rating
         sorted_teams = [t[0] for t in sorted(pts.items(), key=lambda x: (x[1], gd[x[0]], elo_dict[x[0]]), reverse=True)]
         group_standings[group_letter] = sorted_teams
         
-        # Track group letter, team, points, goal difference, and elo for the 3rd place pool
         third_places.append({
             'group': group_letter, 'team': sorted_teams[2], 
             'pts': pts[sorted_teams[2]], 'gd': gd[sorted_teams[2]], 'elo': elo_dict[sorted_teams[2]]
@@ -201,7 +198,6 @@ def run_tournament(elo_dict, groups, played_matches, annex_c_matrix, determinist
     best_thirds = sorted(third_places, key=lambda x: (x['pts'], x['gd'], x['elo']), reverse=True)[:8]
     third_teams_dict = {x['group']: x['team'] for x in best_thirds}
     
-    # Annex C Mapping
     combo_key = "".join(sorted(third_teams_dict.keys()))
     official_mapping = annex_c_matrix.get(combo_key, {})
     
@@ -222,28 +218,28 @@ def run_tournament(elo_dict, groups, played_matches, annex_c_matrix, determinist
 
     bracket = {"Round of 32": [], "Round of 16": [], "Quarter-Finals": [], "Semi-Finals": [], "Final": []}
     
-    def play_match(t1, t2, round_name=None):
+    def play_match(t1, t2, match_num, round_name=None):
         if deterministic: winner = t1 if elo_dict.get(t1, 1500) > elo_dict.get(t2, 1500) else t2
         else:
             p_win = 1 / (1 + 10 ** ((elo_dict.get(t2, 1500) - elo_dict.get(t1, 1500)) / 400))
             winner = t1 if np.random.rand() < p_win else t2
             
-        if round_name: bracket[round_name].append(f"{t1} vs {t2} *(Adv: {winner})*")
+        if round_name: bracket[round_name].append(f"**M{match_num}**: {t1} vs {t2} *(Adv: {winner})*")
         return winner
 
     m = {}
     for i, match in enumerate(r32_matches):
-        m[73+i] = play_match(match[0], match[1], "Round of 32" if deterministic else None)
+        m[73+i] = play_match(match[0], match[1], 73+i, "Round of 32" if deterministic else None)
 
     r16_matches = [(m[74], m[77]), (m[73], m[75]), (m[76], m[78]), (m[79], m[80]), (m[83], m[84]), (m[81], m[82]), (m[86], m[88]), (m[85], m[87])]
-    for i, match in enumerate(r16_matches): m[89+i] = play_match(match[0], match[1], "Round of 16" if deterministic else None)
+    for i, match in enumerate(r16_matches): m[89+i] = play_match(match[0], match[1], 89+i, "Round of 16" if deterministic else None)
     
     qf_matches = [(m[89], m[90]), (m[93], m[94]), (m[91], m[92]), (m[95], m[96])]
-    for i, match in enumerate(qf_matches): m[97+i] = play_match(match[0], match[1], "Quarter-Finals" if deterministic else None)
+    for i, match in enumerate(qf_matches): m[97+i] = play_match(match[0], match[1], 97+i, "Quarter-Finals" if deterministic else None)
     
-    m[101] = play_match(m[97], m[98], "Semi-Finals" if deterministic else None)
-    m[102] = play_match(m[99], m[100], "Semi-Finals" if deterministic else None)
-    winner = play_match(m[101], m[102], "Final" if deterministic else None)
+    m[101] = play_match(m[97], m[98], 101, "Semi-Finals" if deterministic else None)
+    m[102] = play_match(m[99], m[100], 102, "Semi-Finals" if deterministic else None)
+    winner = play_match(m[101], m[102], 104, "Final" if deterministic else None)
     
     if deterministic: return bracket
     else: return [m[i] for i in range(73, 89)], [m[i] for i in range(89, 97)], [m[i] for i in range(97, 101)], [m[101], m[102]], winner
@@ -314,10 +310,16 @@ with tab3:
     st.markdown(f"Locking in **{len(played_matches)} completed match scores**.")
     
     display_results = []
-    for match, score in played_matches.items():
-        display_results.append({"Home": match[0], "Away": match[1], "Score": f"{score[0]} - {score[1]}"})
+    for match, data in played_matches.items():
+        display_results.append({
+            "Match #": data[2], 
+            "Home": match[0], 
+            "Away": match[1], 
+            "Score": f"{data[0]} - {data[1]}"
+        })
         
-    st.dataframe(pd.DataFrame(display_results), use_container_width=True)
+    display_df = pd.DataFrame(display_results).sort_values("Match #")
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
 
 with tab4:
     st.header("Current Elo Ratings (Source Data)")
