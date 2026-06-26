@@ -317,7 +317,19 @@ with tab2:
 
 with tab3:
     st.header("Live Results Engine")
-    st.markdown(f"Locking in **{len(played_matches)} completed match scores**.")
+    
+    # Place the text and button side-by-side using columns
+    col_text, col_btn = st.columns([4, 1])
+    
+    with col_text:
+        st.markdown(f"Locking in **{len(played_matches)} completed match scores**.")
+        
+    with col_btn:
+        if st.button("🔄 Refresh Live Data"):
+            # Clear the 5-minute cache specifically for this function
+            fetch_live_results.clear()
+            # Force the Streamlit app to instantly rerun from top to bottom
+            st.rerun()
     
     display_results = []
     for match, data in played_matches.items():
